@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Tessera
+Comment=Automatic desktop icons for Wayland
+Exec=tessera
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
