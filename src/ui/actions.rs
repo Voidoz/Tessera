@@ -14,6 +14,13 @@ use crate::fileops;
 use super::DesktopHost;
 
 impl DesktopHost {
+    /// Open an item with the desktop's default handler, reporting failures.
+    pub(super) fn open_item(&self, item: &DesktopItem) {
+        if let Err(error) = item.open() {
+            self.report_error(&error);
+        }
+    }
+
     pub(super) fn trash_item(self: &Rc<Self>, item: &DesktopItem) {
         let path = item.path.clone();
         let file = gio::File::for_path(&path);
@@ -30,7 +37,14 @@ impl DesktopHost {
                         host.render();
                     }
                 }
-                Err(error) => warn!("cannot move {} to Trash: {error}", path.display()),
+                Err(error) => {
+                    let message = format!("Could not move {} to Trash: {error}", path.display());
+                    if let Some(host) = weak.upgrade() {
+                        host.report_error(&message);
+                    } else {
+                        warn!("{message}");
+                    }
+                }
             },
         );
     }
@@ -43,7 +57,7 @@ impl DesktopHost {
         if let Err(error) =
             gio::AppInfo::launch_default_for_uri(&uri, None::<&gio::AppLaunchContext>)
         {
-            warn!("cannot open {}: {error}", parent.display());
+            self.report_error(&format!("Could not open {}: {error}", parent.display()));
         }
     }
 

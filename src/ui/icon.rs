@@ -9,7 +9,6 @@ use gtk::gdk;
 use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
-use log::warn;
 
 use crate::desktop::DesktopItem;
 use crate::layout::Slot;
@@ -129,8 +128,8 @@ fn wire_activate(
                 .is_some_and(|last| now.duration_since(last) <= Duration::from_millis(450));
         last_click.set(if activate { None } else { Some(now) });
 
-        if activate && let Err(error) = item.open() {
-            warn!("{error}");
+        if activate && let Some(host) = host.upgrade() {
+            host.open_item(&item);
         }
     });
 }

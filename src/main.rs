@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::Duration;
 
 use clap::Parser;
 use gtk::glib;
@@ -20,11 +21,15 @@ fn main() -> glib::ExitCode {
         Err(error) => error.exit(),
     };
 
+    let mut startup_notice = None;
     let config = match Config::load(cli.config.as_deref()) {
         Ok(config) => config,
         Err(error) => {
             eprintln!("tessera: {error}");
             eprintln!("tessera: continuing with default settings");
+            startup_notice = Some(format!(
+                "Configuration problem: {error}. Using default settings."
+            ));
             Config::default().sanitized()
         }
     };
@@ -49,6 +54,10 @@ fn main() -> glib::ExitCode {
                 return;
             }
 
+            if let Some(message) = &startup_notice {
+                tessera::notify::error(app, message);
+            }
+
             if !gtk4_layer_shell::is_supported() {
                 eprintln!(
                     "tessera: this compositor does not expose the wlr-layer-shell protocol"
@@ -56,7 +65,14 @@ fn main() -> glib::ExitCode {
                 eprintln!(
                     "tessera: use a Wayland compositor with layer-shell support (niri, Hyprland, sway, river, labwc…)"
                 );
-                app.quit();
+                tessera::notify::error(
+                    app,
+                    "This compositor does not support wlr-layer-shell, so Tessera cannot create desktop surfaces.",
+                );
+                // Give the notification a moment to reach the bus before the
+                // process exits.
+                let app = app.clone();
+                glib::timeout_add_local_once(Duration::from_millis(250), move || app.quit());
                 return;
             }
 

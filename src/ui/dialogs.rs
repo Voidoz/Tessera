@@ -236,11 +236,20 @@ impl DesktopHost {
             let weak = Rc::downgrade(self);
             let uri = uri.clone();
             button.connect_clicked(move |_| {
-                if let Err(error) = app.launch_uris(&[uri.as_str()], None::<&gio::AppLaunchContext>)
-                {
-                    warn!("cannot launch application: {error}");
-                } else if let Some(host) = weak.upgrade() {
-                    host.close_overlay();
+                match app.launch_uris(&[uri.as_str()], None::<&gio::AppLaunchContext>) {
+                    Ok(()) => {
+                        if let Some(host) = weak.upgrade() {
+                            host.close_overlay();
+                        }
+                    }
+                    Err(error) => {
+                        let message = format!("Could not launch {}: {error}", app.name());
+                        if let Some(host) = weak.upgrade() {
+                            host.report_error(&message);
+                        } else {
+                            warn!("{message}");
+                        }
+                    }
                 }
             });
             card.append(&button);

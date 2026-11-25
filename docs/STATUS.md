@@ -120,13 +120,16 @@ compositor or input device was tested.
 ### Runtime and robustness
 
 - `GFileMonitor` live refresh with debounce when Desktop contents change.
+- Operation failures are reported as desktop notifications (`GNotification`),
+  coalesced under one notification id so a burst of failures updates one
+  message instead of stacking windows.
 - Monitor add/remove and geometry/scale-change handling (implemented; unplug and
   scale changes not manually tested).
 - State file writes are atomic (temp file + rename).
 - A stale timeout `SourceId::remove()` panic was found and fixed by clearing the
   stored source when it fires.
-- Unit tests cover layout, assignment, config/clamping, Desktop scanning,
-  sorting behavior, and state round-tripping/rename.
+- Unit tests cover layout, assignment, scene placement, config/clamping, Desktop
+  scanning, sorting behavior, file helpers, and state round-tripping/rename.
 - Release binary builds with `cargo build --release`.
 - No test processes or layer surfaces are left running.
 
@@ -177,8 +180,10 @@ subject to change.
     placement. The stale entry remains in the state file.
 18. **State is keyed by path.** Rename is handled; moving a file outside
     Tessera leaves a stale pinned entry (harmless, but it accumulates).
-19. **No error toast.** Most failures go to stderr/log only. Rename is the one
-    operation with an inline error message.
+19. **Errors are notifications, not in-surface toasts.** Operation failures are
+    sent through `GNotification` to the session's notification daemon and also
+    logged as warnings. Without a daemon they are only in the log. Rename keeps
+    its inline error because its dialog is already open.
 20. **No config hot reload or settings UI.** Edit the TOML and restart.
 21. **No packaging.** No AUR/Flatpak/deb packaging or XDG autostart installer;
     README shows the manual steps.
@@ -240,7 +245,8 @@ that are intentionally out of scope for the current design.
   hotplug, and panels.
 - Tests against Hyprland, sway, river, labwc, Wayfire, KDE, and non-GTK file
   managers.
-- Async file operations and structured error surface.
+- Async file operations with progress and conflict dialogs (errors already use
+  system notifications).
 - Config hot reload and a settings UI.
 - Localization and RTL layout.
 - Packaging and install script; migration tool for renames.
@@ -260,6 +266,7 @@ result.
 | --- | --- | --- |
 | Placement | `src/layout.rs`, `src/assignment.rs`, `src/scene.rs` | Grid geometry, pinned-first assignment, and the per-render scene mapping items to slots |
 | Files and state | `src/desktop.rs`, `src/state.rs`, `src/fileops.rs` | Folder scan and `.desktop` parsing, TOML position store, name validation/copy helpers |
+| User feedback | `src/notify.rs` | Operation failures sent through `GNotification` to the session notification daemon |
 | UI | `src/ui/*` | Layer surfaces, widgets, gestures, overlays, and file actions |
 | Startup | `src/config.rs`, `src/main.rs` | TOML config, clap CLI, GTK application setup |
 
@@ -338,7 +345,7 @@ cargo clippy --all-targets
 cargo build --release
 ```
 
-The current test suite has 39 passing unit tests. It does not cover UI
+The current test suite has 40 passing unit tests. It does not cover UI
 interaction. Manual testing used temporary wlr virtual-pointer and
 virtual-keyboard clients; those helpers are not checked in.
 

@@ -92,6 +92,18 @@ drops on bare wallpaper only work in `drop_target = "full"` mode.
 Context menus and dialogs are drawn inside the desktop surface, so they work
 without xdg-popup support.
 
+### Errors
+
+Tessera does not draw its own error UI. Failures such as a file that cannot be
+opened, a move to Trash that is refused, a dropped file that cannot be copied,
+or positions that cannot be saved are sent to the desktop notification service.
+They show up through whichever notification daemon you use and follow its
+history and Do Not Disturb settings. The rename dialog is the exception: its
+error appears inline because the dialog is already open.
+
+Every notification is also logged as a warning, so a terminal run or the
+journal still shows it when no notification daemon is running.
+
 ## Configuration
 
 ```toml
@@ -128,7 +140,7 @@ desktop file interactions:
 cross-monitor drag, double-click open, context menu, Open With, rename, move to
 Trash, Copy Path, properties, Delete/Enter/F2/Escape shortcuts, live folder
 watching, drag files in (copy) and out (Shift+drag), panel-aware layout,
-click-through wallpaper.
+click-through wallpaper, system notifications for operation failures.
 
 **Still missing compared with Windows/macOS/Plasma:**
 
@@ -136,7 +148,6 @@ click-through wallpaper.
 - copy/cut/paste of files between folders, and duplicate;
 - undo for rename/delete/move;
 - permanent delete (`Shift+Delete`) and an empty-Trash UI;
-- in-surface progress/error toasts (errors currently go to the log);
 - image/video thumbnails rather than themed icons;
 - keyboard arrow-key navigation and full accessibility;
 - freeform pixel positioning (positions snap to grid slots);
@@ -153,6 +164,8 @@ click-through wallpaper.
 - GTK 4.8 or newer and gtk4-layer-shell at build and run time.
   On Arch: `sudo pacman -S gtk4 gtk4-layer-shell`.
 - The `gio` command from GLib when opening `.desktop` entries.
+- A desktop notification daemon (dunst, mako, the GNOME/KDE one, …) to see
+  error notifications; without one, they are only logged.
 - Compositors without layer-shell (notably GNOME/Mutter) are not supported by
   this design.
 

@@ -23,9 +23,10 @@ impl DesktopHost {
         y: f64,
     ) {
         let mut copied = Vec::new();
+        let mut failures = Vec::new();
         for file in files {
             let Some(source) = file.path() else {
-                warn!("ignoring non-local drop: {}", file.uri());
+                failures.push(format!("{} is not a local file", file.uri()));
                 continue;
             };
             let Some(name) = source.file_name() else {
@@ -34,14 +35,17 @@ impl DesktopHost {
             let destination = fileops::unique_destination(&self.desktop_dir, name);
             match fileops::copy_path(&source, &destination) {
                 Ok(()) => copied.push(destination),
-                Err(error) => warn!(
-                    "cannot copy {} to {}: {error}",
-                    source.display(),
-                    destination.display()
-                ),
+                Err(error) => {
+                    let message = format!("Could not copy {}: {error}", source.display());
+                    warn!("{message}");
+                    failures.push(message);
+                }
             }
         }
 
+        if !failures.is_empty() {
+            self.report_error(&failure_summary(&failures));
+        }
         if copied.is_empty() {
             return;
         }
@@ -109,5 +113,32 @@ impl DesktopHost {
                 )
             })
             .collect()
+    }
+}
+
+/// Turn per-file drop errors into one notification body.
+fn failure_summary(failures: &[String]) -> String {
+    match failures {
+        [] => String::new(),
+        [only] => only.clone(),
+        [first, ..] => format!(
+            "{} items could not be dropped; first error: {first}",
+            failures.len()
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::failure_summary;
+
+    #[test]
+    fn summarizes_single_and_multiple_failures() {
+        assert_eq!(failure_summary(&[]), "");
+        assert_eq!(failure_summary(&["one failed".to_owned()]), "one failed");
+        assert_eq!(
+            failure_summary(&["one failed".to_owned(), "two failed".to_owned()]),
+            "2 items could not be dropped; first error: one failed"
+        );
     }
 }

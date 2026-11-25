@@ -310,11 +310,17 @@ impl DesktopHost {
             .collect()
     }
 
-    /// Persist the position store, warning instead of failing the UI.
+    /// Persist the position store, reporting failures to the user.
     pub(super) fn save_state(&self) {
         if let Err(error) = self.state.borrow().save() {
-            warn!("cannot save icon positions: {error}");
+            self.report_error(&format!("Could not save icon positions: {error}"));
         }
+    }
+
+    /// Log an operation failure and surface it as a desktop notification.
+    pub(super) fn report_error(&self, message: &str) {
+        warn!("{message}");
+        crate::notify::error(&self.app, message);
     }
 
     pub(super) fn select_item(
@@ -397,9 +403,7 @@ impl DesktopHost {
                 glib::Propagation::Stop
             }
             gdk::Key::Return | gdk::Key::KP_Enter => {
-                if let Err(error) = selection.item.open() {
-                    warn!("{error}");
-                }
+                self.open_item(&selection.item);
                 glib::Propagation::Stop
             }
             gdk::Key::F2 => {

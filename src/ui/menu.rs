@@ -3,7 +3,6 @@
 use std::rc::Rc;
 
 use gtk::prelude::*;
-use log::warn;
 
 use crate::desktop::DesktopItem;
 
@@ -43,9 +42,7 @@ impl DesktopHost {
             let item = item.clone();
             self.add_menu_item(&card, "Open", move |host| {
                 host.close_overlay();
-                if let Err(error) = item.open() {
-                    warn!("{error}");
-                }
+                host.open_item(&item);
             });
         }
         if can_open_with {
