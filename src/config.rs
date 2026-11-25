@@ -1,9 +1,9 @@
 //! Configuration and command-line handling.
 
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use serde::Deserialize;
 
 use crate::layout::{Corner, GridSpec};
@@ -125,94 +125,35 @@ impl Config {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+/// Automatic desktop icons for Wayland.
+///
+/// The output, desktop directory and state file also read the matching
+/// `TESSERA_*` environment variables when their flag is absent; an explicit
+/// flag always wins.
+#[derive(Debug, Parser)]
+#[command(
+    name = "tessera",
+    version,
+    after_help = "Configuration lives in ~/.config/tessera/config.toml.\n\
+                  Dragged positions live in ~/.local/state/tessera/positions.toml."
+)]
 pub struct Cli {
-    pub config: Option<PathBuf>,
+    /// Preferred output for automatically placed items.
+    #[arg(long, value_name = "CONNECTOR", env = "TESSERA_OUTPUT")]
     pub output: Option<String>,
+
+    /// Folder to show instead of the XDG Desktop folder.
+    #[arg(long, value_name = "PATH", env = "TESSERA_DESKTOP_DIR")]
     pub desktop_dir: Option<PathBuf>,
+
+    /// Configuration file to use.
+    #[arg(long, value_name = "PATH")]
+    pub config: Option<PathBuf>,
+
+    /// Where to store dragged icon positions.
+    #[arg(long, value_name = "PATH", env = "TESSERA_STATE_FILE")]
     pub state_file: Option<PathBuf>,
 }
-
-#[derive(Debug)]
-pub enum Action {
-    Run(Cli),
-    Help,
-    Version,
-}
-
-pub fn parse_args<I>(args: I) -> std::result::Result<Action, String>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    let mut cli = Cli::default();
-    let mut args = args.into_iter().skip(1).peekable();
-
-    while let Some(arg) = args.next() {
-        let arg = arg.to_string_lossy();
-        match arg.as_ref() {
-            "-h" | "--help" => return Ok(Action::Help),
-            "-V" | "--version" => return Ok(Action::Version),
-            "--output" => {
-                cli.output = Some(value_for(&mut args, "--output")?);
-            }
-            "--desktop-dir" => {
-                cli.desktop_dir = Some(PathBuf::from(value_for(&mut args, "--desktop-dir")?));
-            }
-            "--config" => {
-                cli.config = Some(PathBuf::from(value_for(&mut args, "--config")?));
-            }
-            "--state-file" => {
-                cli.state_file = Some(PathBuf::from(value_for(&mut args, "--state-file")?));
-            }
-            _ if arg.starts_with("--output=") => {
-                cli.output = Some(arg["--output=".len()..].to_owned());
-            }
-            _ if arg.starts_with("--desktop-dir=") => {
-                cli.desktop_dir = Some(PathBuf::from(&arg["--desktop-dir=".len()..]));
-            }
-            _ if arg.starts_with("--config=") => {
-                cli.config = Some(PathBuf::from(&arg["--config=".len()..]));
-            }
-            _ if arg.starts_with("--state-file=") => {
-                cli.state_file = Some(PathBuf::from(&arg["--state-file=".len()..]));
-            }
-            _ => return Err(format!("unknown argument: {arg}")),
-        }
-    }
-
-    Ok(Action::Run(cli))
-}
-
-fn value_for<I>(
-    args: &mut std::iter::Peekable<I>,
-    flag: &str,
-) -> std::result::Result<String, String>
-where
-    I: Iterator<Item = OsString>,
-{
-    match args.next() {
-        Some(value) if !value.is_empty() => Ok(value.to_string_lossy().into_owned()),
-        _ => Err(format!("{flag} requires a value")),
-    }
-}
-
-pub const HELP: &str = "\
-Tessera — automatic desktop icons for Wayland
-
-Usage: tessera [OPTIONS]
-
-Options:
-      --output <CONNECTOR>     Preferred output for automatically placed items.
-      --desktop-dir <PATH>     Folder to show instead of the XDG Desktop folder.
-      --config <PATH>          Configuration file to use.
-      --state-file <PATH>      Where to store dragged icon positions.
-  -h, --help                   Print this help.
-  -V, --version                Print the version.
-
-Configuration lives in ~/.config/tessera/config.toml.  Dragged positions live in
-~/.local/state/tessera/positions.toml.  Environment variables TESSERA_OUTPUT,
-TESSERA_DESKTOP_DIR and TESSERA_STATE_FILE are also accepted.
-";
 
 #[cfg(test)]
 mod tests {
@@ -245,17 +186,70 @@ mod tests {
 
     #[test]
     fn parses_output_forms() {
-        let action = parse_args([OsString::from("tessera"), OsString::from("--output=DP-2")])
-            .expect("valid args");
-        let Action::Run(cli) = action else {
-            panic!("expected run action");
-        };
+        for args in [
+            vec!["tessera", "--output", "DP-2"],
+            vec!["tessera", "--output=DP-2"],
+        ] {
+            let cli = Cli::try_parse_from(args).expect("valid args");
+            assert_eq!(cli.output.as_deref(), Some("DP-2"));
+        }
+    }
+
+    #[test]
+    fn parses_every_flag() {
+        let cli = Cli::try_parse_from([
+            "tessera",
+            "--output",
+            "DP-2",
+            "--desktop-dir",
+            "/tmp/desk",
+            "--config",
+            "/tmp/config.toml",
+            "--state-file=/tmp/state.toml",
+        ])
+        .expect("valid args");
         assert_eq!(cli.output.as_deref(), Some("DP-2"));
+        assert_eq!(cli.desktop_dir.as_deref(), Some(Path::new("/tmp/desk")));
+        assert_eq!(cli.config.as_deref(), Some(Path::new("/tmp/config.toml")));
+        assert_eq!(
+            cli.state_file.as_deref(),
+            Some(Path::new("/tmp/state.toml"))
+        );
     }
 
     #[test]
     fn rejects_unknown_arguments() {
-        assert!(parse_args([OsString::from("tessera"), OsString::from("--wat")]).is_err());
+        let error = Cli::try_parse_from(["tessera", "--wat"]).expect_err("unknown flag");
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn flags_read_environment_variables() {
+        use clap::CommandFactory;
+
+        let command = Cli::command();
+        let envs: Vec<(String, String)> = command
+            .get_arguments()
+            .filter_map(|arg| {
+                let env = arg.get_env()?;
+                Some((arg.get_id().to_string(), env.to_string_lossy().into_owned()))
+            })
+            .collect();
+        assert!(envs.contains(&("output".to_owned(), "TESSERA_OUTPUT".to_owned())));
+        assert!(envs.contains(&("desktop_dir".to_owned(), "TESSERA_DESKTOP_DIR".to_owned())));
+        assert!(envs.contains(&("state_file".to_owned(), "TESSERA_STATE_FILE".to_owned())));
+    }
+
+    #[test]
+    fn help_and_version_are_display_errors() {
+        for args in [["tessera", "--help"], ["tessera", "-h"]] {
+            let error = Cli::try_parse_from(args).expect_err("help exits early");
+            assert_eq!(error.kind(), clap::error::ErrorKind::DisplayHelp);
+        }
+        for args in [["tessera", "--version"], ["tessera", "-V"]] {
+            let error = Cli::try_parse_from(args).expect_err("version exits early");
+            assert_eq!(error.kind(), clap::error::ErrorKind::DisplayVersion);
+        }
     }
 }
 

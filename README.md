@@ -9,8 +9,8 @@ onto another monitor, and those positions are remembered. It also has a real
 file menu, keyboard shortcuts, Trash support, and drag-and-drop in both
 directions.
 
-> **Project status and handoff:** [`docs/STATUS.md`](docs/STATUS.md) is the
-> authoritative list of implemented, partial, and missing work.
+> **Project status:** [`docs/STATUS.md`](docs/STATUS.md) is the authoritative
+> list of implemented, partial, and missing work.
 
 ## Two kinds of positions
 
@@ -196,7 +196,8 @@ tessera --version
 ```
 
 `TESSERA_OUTPUT`, `TESSERA_DESKTOP_DIR` and `TESSERA_STATE_FILE` are accepted
-as convenience environment overrides, mainly for development and testing.
+as convenience environment overrides, mainly for development and testing. An
+explicit flag always wins over the matching environment variable.
 
 Inspect connector names with `niri msg outputs`, `hyprctl monitors`, or
 `swaymsg -t get_outputs`.
@@ -232,9 +233,8 @@ cargo run -- --desktop-dir ./some/test/folder --output DP-2
 ```
 
 The layout, assignment and state logic is covered by unit tests and does not
-need a compositor. For the full implemented/partial/missing inventory and the
-next-work list, read [`docs/STATUS.md`](docs/STATUS.md); for agent handoff notes,
-read [`AGENTS.md`](AGENTS.md).
+need a compositor. The full implemented/partial/missing inventory and the
+next-work list live in [`docs/STATUS.md`](docs/STATUS.md).
 
 ## License
 

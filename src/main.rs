@@ -2,10 +2,11 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use clap::Parser;
 use gtk::glib;
 use gtk::prelude::*;
 
-use tessera::config::{Action, Cli, Config};
+use tessera::config::{Cli, Config};
 use tessera::ui::DesktopHost;
 
 fn main() -> glib::ExitCode {
@@ -14,21 +15,9 @@ fn main() -> glib::ExitCode {
     )
     .init();
 
-    let cli = match tessera::config::parse_args(std::env::args_os()) {
-        Ok(Action::Run(cli)) => cli,
-        Ok(Action::Help) => {
-            print!("{}", tessera::config::HELP);
-            return glib::ExitCode::SUCCESS;
-        }
-        Ok(Action::Version) => {
-            println!("tessera {}", env!("CARGO_PKG_VERSION"));
-            return glib::ExitCode::SUCCESS;
-        }
-        Err(error) => {
-            eprintln!("tessera: {error}");
-            eprintln!("Try `tessera --help`.");
-            return glib::ExitCode::FAILURE;
-        }
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => error.exit(),
     };
 
     let config = match Config::load(cli.config.as_deref()) {
@@ -46,11 +35,10 @@ fn main() -> glib::ExitCode {
     let state_file = cli
         .state_file
         .clone()
-        .or_else(|| std::env::var_os("TESSERA_STATE_FILE").map(Into::into))
         .unwrap_or_else(|| default_state_dir().join("tessera/positions.toml"));
 
     let app = gtk::Application::builder()
-        .application_id("io.github.tessera.Tessera")
+        .application_id("io.github.Voidoz.Tessera")
         .build();
     let host: Rc<RefCell<Option<Rc<DesktopHost>>>> = Rc::new(RefCell::new(None));
 
@@ -87,17 +75,10 @@ fn main() -> glib::ExitCode {
 }
 
 fn apply_overrides(mut config: Config, cli: &Cli) -> Config {
-    let env_output = std::env::var("TESSERA_OUTPUT").ok();
-    let env_desktop = std::env::var_os("TESSERA_DESKTOP_DIR");
-
-    if let Some(output) = cli.output.clone().or(env_output) {
+    if let Some(output) = cli.output.clone() {
         config.output = Some(output);
     }
-    if let Some(desktop_dir) = cli
-        .desktop_dir
-        .clone()
-        .or_else(|| env_desktop.map(Into::into))
-    {
+    if let Some(desktop_dir) = cli.desktop_dir.clone() {
         config.desktop_dir = Some(desktop_dir);
     }
     config.sanitized()

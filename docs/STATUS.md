@@ -1,11 +1,9 @@
 # Tessera — project status
 
-Snapshot: **2026-11-24**, version `0.1.0`.
+Snapshot: **2026-11-25**, version `0.1.0`.
 
-This document is the handoff point for future sessions. It separates what is
-actually implemented and verified from what is partial, and lists the known
-gaps. `README.md` is the user-facing guide; `AGENTS.md` contains the short
-version for coding agents.
+This document separates what is actually implemented and verified from what is
+partial, and lists the known gaps. `README.md` is the user guide.
 
 ## What this is
 
@@ -187,7 +185,7 @@ subject to change.
 
 ## Not implemented
 
-This is the full backlog from the desktop-parity discussion, including items
+This is the full backlog relative to a mature desktop shell, including items
 that are intentionally out of scope for the current design.
 
 ### Selection and clipboard
@@ -256,13 +254,13 @@ that are intentionally out of scope for the current design.
 
 | File | Responsibility |
 | --- | --- |
-| `src/main.rs` | CLI, config/state path selection, GTK application, monitors |
+| `src/main.rs` | Startup, config/state path selection, GTK application, monitors |
 | `src/ui.rs` | Layer surfaces, probes, icon widgets, drag/drop, context menus, dialogs, keyboard, focus |
 | `src/layout.rs` | Pure grid geometry, panel insets, compaction, slots |
 | `src/assignment.rs` | Pinned-first, auto-fill placement across outputs |
 | `src/state.rs` | TOML position store, atomic save, rename/remove |
 | `src/desktop.rs` | Desktop scan, `.desktop` parsing, MIME/icon resolution, launch |
-| `src/config.rs` | TOML config, CLI parsing, drop-target mode |
+| `src/config.rs` | TOML config, clap-derived CLI, drop-target mode |
 | `contrib/tessera.desktop` | Optional XDG autostart entry |
 
 Important invariants:
@@ -310,6 +308,10 @@ Overrides:
 - `--output`, `--desktop-dir`, `--config`, `--state-file`
 - `TESSERA_OUTPUT`, `TESSERA_DESKTOP_DIR`, `TESSERA_STATE_FILE`
 
+The command line is parsed with clap: `--help` documents every flag, both
+`--flag value` and `--flag=value` work, and explicit flags win over the
+environment variables.
+
 ## Test commands
 
 ```sh
@@ -318,7 +320,7 @@ cargo clippy --all-targets
 cargo build --release
 ```
 
-The current test suite has 25 passing unit tests. It does not cover UI
+The current test suite has 28 passing unit tests. It does not cover UI
 interaction. Manual testing used temporary wlr virtual-pointer and
 virtual-keyboard clients; those helpers are not checked in.
 
@@ -343,13 +345,13 @@ virtual-keyboard clients; those helpers are not checked in.
    wayland test harness.
 9. **Packaging and autostart installer**, then test on Hyprland/sway.
 
-## Session handoff notes
+## Testing notes
 
-- Do not test destructive operations against the real `~/Desktop`. Use a
-  fixture directory and `--state-file`.
-- Use `XDG_DATA_HOME` pointing at a temporary directory when testing Trash, so
-  test files do not land in the user's real Trash.
-- On this machine, test on **DP-2** and avoid disturbing the center/left
-  displays; the user may be gaming or using them. `niri msg layers`, `grim -o
-  DP-2`, and synthetic wlr input helpers were used.
+- Never run destructive tests against a real `~/Desktop`. Use a fixture
+  directory and `--state-file`.
+- Point `XDG_DATA_HOME` at a temporary directory when testing Trash, so test
+  files never reach the real trash.
+- Prefer a secondary output for test surfaces and screenshots so the main
+  display is not disturbed. `niri msg layers`, `grim -o <output>`, and
+  synthetic wlr input helpers are useful here.
 - Keep `README.md` and this file in sync when behavior changes.
