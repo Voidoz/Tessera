@@ -97,6 +97,9 @@ fn apply_overrides(mut config: Config, cli: &Cli) -> Config {
     if let Some(desktop_dir) = cli.desktop_dir.clone() {
         config.desktop_dir = Some(desktop_dir);
     }
+    if let Some(icon_size) = cli.icon_size {
+        config.icon_size = icon_size;
+    }
     config.sanitized()
 }
 

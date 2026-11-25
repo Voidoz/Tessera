@@ -307,7 +307,7 @@ Default config:
 # ~/.config/tessera/config.toml
 output = "DP-2"        # preferred auto-placement output
 corner = "top-left"
-icon_size = 64
+icon_size = "medium"   # small | medium | large, or 32-160 px
 font_size = 13
 gap = 8
 margin = 32
@@ -330,8 +330,12 @@ row = 3
 
 Overrides:
 
-- `--output`, `--desktop-dir`, `--config`, `--state-file`
-- `TESSERA_OUTPUT`, `TESSERA_DESKTOP_DIR`, `TESSERA_STATE_FILE`
+- `--output`, `--desktop-dir`, `--icon-size`, `--config`, `--state-file`
+- `TESSERA_OUTPUT`, `TESSERA_DESKTOP_DIR`, `TESSERA_ICON_SIZE`,
+  `TESSERA_STATE_FILE`
+
+`icon_size` (and `--icon-size`) accepts the presets `small` (48 px), `medium`
+(64 px) and `large` (96 px), or a pixel value between 32 and 160.
 
 The command line is parsed with clap: `--help` documents every flag, both
 `--flag value` and `--flag=value` work, and explicit flags win over the
@@ -345,7 +349,7 @@ cargo clippy --all-targets
 cargo build --release
 ```
 
-The current test suite has 40 passing unit tests. It does not cover UI
+The current test suite has 47 passing unit tests. It does not cover UI
 interaction. Manual testing used temporary wlr virtual-pointer and
 virtual-keyboard clients; those helpers are not checked in.
 

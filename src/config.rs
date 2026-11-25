@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use serde::Deserialize;
 
-use crate::layout::{Corner, GridSpec};
+use crate::layout::{Corner, GridSpec, MAX_ICON_PX, MIN_ICON_PX};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -17,6 +17,85 @@ pub enum DropTargetMode {
     Icons,
     /// The entire desktop accepts file drops, at the cost of click-through.
     Full,
+}
+
+/// A named icon size preset or an explicit pixel size.
+///
+/// The configuration file accepts either form:
+///
+/// ```toml
+/// icon_size = "large"   # small | medium | large
+/// icon_size = 72        # explicit pixels
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IconSize {
+    Small,
+    Medium,
+    Large,
+    Custom(u32),
+}
+
+impl IconSize {
+    pub const DEFAULT: Self = Self::Medium;
+
+    pub fn pixels(self) -> u32 {
+        match self {
+            Self::Small => 48,
+            Self::Medium => 64,
+            Self::Large => 96,
+            Self::Custom(pixels) => pixels,
+        }
+    }
+
+    /// Parse a preset name (case-insensitive) or an explicit pixel count.
+    pub fn parse(value: &str) -> Result<Self, String> {
+        let value = value.trim();
+        match value.to_ascii_lowercase().as_str() {
+            "small" => Ok(Self::Small),
+            "medium" => Ok(Self::Medium),
+            "large" => Ok(Self::Large),
+            _ => value.parse::<u32>().map(Self::Custom).map_err(|_| {
+                format!("unknown icon size `{value}`; use small, medium, large, or a pixel size")
+            }),
+        }
+    }
+
+    /// Keep custom pixel sizes within the range the layout can draw.
+    fn clamped(self) -> Self {
+        match self {
+            Self::Custom(pixels) => Self::Custom(pixels.clamp(MIN_ICON_PX, MAX_ICON_PX)),
+            named => named,
+        }
+    }
+}
+
+impl std::str::FromStr for IconSize {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl<'de> Deserialize<'de> for IconSize {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Name(String),
+            Pixels(i64),
+        }
+
+        match Repr::deserialize(deserializer)? {
+            Repr::Name(name) => Self::parse(&name).map_err(serde::de::Error::custom),
+            Repr::Pixels(pixels) => u32::try_from(pixels)
+                .map(Self::Custom)
+                .map_err(|_| serde::de::Error::custom("icon size must be a positive pixel count")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -31,8 +110,8 @@ pub struct Config {
     pub desktop_dir: Option<PathBuf>,
     /// Corner from which the grid grows.
     pub corner: Corner,
-    /// Preferred icon image size in logical pixels.
-    pub icon_size: u32,
+    /// Preferred icon size as a preset name or explicit pixels.
+    pub icon_size: IconSize,
     /// Desktop label size in logical pixels.
     pub font_size: u32,
     /// Space between slots in logical pixels.
@@ -52,7 +131,7 @@ impl Default for Config {
             output: None,
             desktop_dir: None,
             corner: Corner::TopLeft,
-            icon_size: 64,
+            icon_size: IconSize::DEFAULT,
             font_size: 13,
             gap: 8,
             margin: 32,
@@ -92,8 +171,8 @@ impl Config {
 
     /// Clamp values once, so the rest of the application can rely on them.
     pub fn sanitized(mut self) -> Self {
+        self.icon_size = self.icon_size.clamped();
         let spec = self.grid_spec();
-        self.icon_size = spec.icon_size as u32;
         self.font_size = spec.font_size as u32;
         self.gap = spec.gap as u32;
         self.margin = spec.margin as u32;
@@ -108,7 +187,12 @@ impl Config {
     }
 
     pub fn grid_spec(&self) -> GridSpec {
-        GridSpec::new(self.icon_size, self.font_size, self.gap, self.margin)
+        GridSpec::new(
+            self.icon_size.pixels(),
+            self.font_size,
+            self.gap,
+            self.margin,
+        )
     }
 
     pub fn desktop_dir(&self) -> PathBuf {
@@ -127,9 +211,9 @@ impl Config {
 
 /// Automatic desktop icons for Wayland.
 ///
-/// The output, desktop directory and state file also read the matching
-/// `TESSERA_*` environment variables when their flag is absent; an explicit
-/// flag always wins.
+/// The output, desktop directory, state file and icon size also read the
+/// matching `TESSERA_*` environment variables when their flag is absent; an
+/// explicit flag always wins.
 #[derive(Debug, Parser)]
 #[command(
     name = "tessera",
@@ -153,6 +237,10 @@ pub struct Cli {
     /// Where to store dragged icon positions.
     #[arg(long, value_name = "PATH", env = "TESSERA_STATE_FILE")]
     pub state_file: Option<PathBuf>,
+
+    /// Icon size: small, medium, large, or a pixel count.
+    #[arg(long, value_name = "SIZE", env = "TESSERA_ICON_SIZE")]
+    pub icon_size: Option<IconSize>,
 }
 
 #[cfg(test)]
@@ -163,7 +251,7 @@ mod tests {
     fn defaults_are_valid() {
         let config = Config::default().sanitized();
         assert_eq!(config.corner, Corner::TopLeft);
-        assert_eq!(config.icon_size, 64);
+        assert_eq!(config.icon_size, IconSize::Medium);
         assert!(!config.single_click);
         assert_eq!(config.drop_target, DropTargetMode::Icons);
     }
@@ -171,17 +259,57 @@ mod tests {
     #[test]
     fn clamps_absurd_values() {
         let config = Config {
-            icon_size: 1,
+            icon_size: IconSize::Custom(1),
             font_size: 100,
             gap: 500,
             margin: 1000,
             ..Config::default()
         }
         .sanitized();
-        assert_eq!(config.icon_size, 32);
+        assert_eq!(config.icon_size, IconSize::Custom(32));
         assert_eq!(config.font_size, 28);
         assert_eq!(config.gap, 48);
         assert_eq!(config.margin, 240);
+    }
+
+    #[test]
+    fn clamps_large_icon_sizes() {
+        let config = Config {
+            icon_size: IconSize::Custom(999),
+            ..Config::default()
+        }
+        .sanitized();
+        assert_eq!(config.icon_size, IconSize::Custom(160));
+    }
+
+    #[test]
+    fn icon_size_presets_and_numbers_parse() {
+        assert_eq!(IconSize::parse("small"), Ok(IconSize::Small));
+        assert_eq!(IconSize::parse(" Medium "), Ok(IconSize::Medium));
+        assert_eq!(IconSize::parse("LARGE"), Ok(IconSize::Large));
+        assert_eq!(IconSize::parse("72"), Ok(IconSize::Custom(72)));
+        assert_eq!(
+            IconSize::parse("huge"),
+            Err("unknown icon size `huge`; use small, medium, large, or a pixel size".to_owned())
+        );
+    }
+
+    #[test]
+    fn preset_pixel_sizes() {
+        assert_eq!(IconSize::Small.pixels(), 48);
+        assert_eq!(IconSize::Medium.pixels(), 64);
+        assert_eq!(IconSize::Large.pixels(), 96);
+        assert_eq!(IconSize::Custom(72).pixels(), 72);
+    }
+
+    #[test]
+    fn preset_sizes_reach_the_grid_spec() {
+        let large = Config {
+            icon_size: IconSize::Large,
+            ..Config::default()
+        }
+        .sanitized();
+        assert_eq!(large.grid_spec().icon_size, 96);
     }
 
     #[test]
@@ -206,15 +334,28 @@ mod tests {
             "--config",
             "/tmp/config.toml",
             "--state-file=/tmp/state.toml",
+            "--icon-size",
+            "large",
         ])
         .expect("valid args");
         assert_eq!(cli.output.as_deref(), Some("DP-2"));
+        assert_eq!(cli.icon_size, Some(IconSize::Large));
         assert_eq!(cli.desktop_dir.as_deref(), Some(Path::new("/tmp/desk")));
         assert_eq!(cli.config.as_deref(), Some(Path::new("/tmp/config.toml")));
         assert_eq!(
             cli.state_file.as_deref(),
             Some(Path::new("/tmp/state.toml"))
         );
+    }
+
+    #[test]
+    fn parses_numeric_icon_size_flag() {
+        let cli = Cli::try_parse_from(["tessera", "--icon-size=72"]).expect("valid args");
+        assert_eq!(cli.icon_size, Some(IconSize::Custom(72)));
+
+        let error =
+            Cli::try_parse_from(["tessera", "--icon-size", "huge"]).expect_err("invalid size");
+        assert!(error.to_string().contains("unknown icon size"));
     }
 
     #[test]
@@ -238,6 +379,7 @@ mod tests {
         assert!(envs.contains(&("output".to_owned(), "TESSERA_OUTPUT".to_owned())));
         assert!(envs.contains(&("desktop_dir".to_owned(), "TESSERA_DESKTOP_DIR".to_owned())));
         assert!(envs.contains(&("state_file".to_owned(), "TESSERA_STATE_FILE".to_owned())));
+        assert!(envs.contains(&("icon_size".to_owned(), "TESSERA_ICON_SIZE".to_owned())));
     }
 
     #[test]
@@ -273,8 +415,37 @@ mod load_tests {
 
         let config = Config::load(Some(&path)).expect("load config");
         assert_eq!(config.corner, Corner::TopRight);
-        assert_eq!(config.icon_size, 72);
+        assert_eq!(config.icon_size, IconSize::Custom(72));
         assert!(config.single_click);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn reads_a_named_icon_size() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("tessera-config-size-{unique}.toml"));
+        std::fs::write(&path, "icon_size = \"large\"\n").expect("write config");
+
+        let config = Config::load(Some(&path)).expect("load config");
+        assert_eq!(config.icon_size, IconSize::Large);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_an_unknown_icon_size() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("tessera-config-bad-size-{unique}.toml"));
+        std::fs::write(&path, "icon_size = \"gigantic\"\n").expect("write config");
+
+        assert!(Config::load(Some(&path)).is_err());
 
         let _ = std::fs::remove_file(path);
     }

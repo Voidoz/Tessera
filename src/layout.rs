@@ -27,6 +27,10 @@ impl Corner {
     }
 }
 
+/// Smallest and largest icon sizes the layout accepts, in logical pixels.
+pub const MIN_ICON_PX: u32 = 32;
+pub const MAX_ICON_PX: u32 = 160;
+
 /// Sizes that control the grid.  Deliberately independent of GTK so the
 /// placement rules can be tested without a compositor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,7 +44,7 @@ pub struct GridSpec {
 impl GridSpec {
     pub fn new(icon_size: u32, font_size: u32, gap: u32, margin: u32) -> Self {
         Self {
-            icon_size: icon_size.clamp(32, 160) as i32,
+            icon_size: icon_size.clamp(MIN_ICON_PX, MAX_ICON_PX) as i32,
             font_size: font_size.clamp(9, 28) as i32,
             gap: gap.clamp(0, 48) as i32,
             margin: margin.clamp(0, 240) as i32,
@@ -214,8 +218,6 @@ impl OutputGrid {
     }
 }
 
-const MIN_ICON_SIZE: i32 = 32;
-
 /// Choose the largest icon size (in four-pixel steps) whose combined capacity
 /// across all outputs can hold every item.
 pub fn compact_spec(
@@ -228,6 +230,7 @@ pub fn compact_spec(
         return spec;
     }
 
+    let minimum = MIN_ICON_PX as i32;
     let mut icon_size = spec.icon_size;
     loop {
         let candidate = spec.with_icon_size(icon_size);
@@ -235,10 +238,10 @@ pub fn compact_spec(
             .iter()
             .map(|output| OutputGrid::new(*output, candidate, corner).capacity())
             .sum();
-        if capacity >= item_count || icon_size <= MIN_ICON_SIZE {
+        if capacity >= item_count || icon_size <= minimum {
             return candidate;
         }
-        icon_size = (icon_size - 4).max(MIN_ICON_SIZE);
+        icon_size = (icon_size - 4).max(minimum);
     }
 }
 

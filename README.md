@@ -110,13 +110,18 @@ journal still shows it when no notification daemon is running.
 # ~/.config/tessera/config.toml
 output = "DP-2"          # preferred output for unpinned items
 corner = "top-left"      # top-left | top-right | bottom-left | bottom-right
-icon_size = 64
+icon_size = "medium"     # small | medium | large, or pixels (e.g. 72)
 font_size = 13
 gap = 8
 margin = 32
 single_click = false
 drop_target = "icons"    # "icons" (click-through) or "full" (drop anywhere)
 ```
+
+`icon_size` accepts a preset name — `small` (48 px), `medium` (64 px) or
+`large` (96 px) — or an explicit pixel value between 32 and 160. The same size
+is used for every output; the grid compacts automatically when more icons have
+to fit.
 
 `output` does not restrict Tessera to one monitor. Every output gets a surface;
 it only decides where new, unpinned items appear first. Without it, Tessera
@@ -203,14 +208,18 @@ copied to `~/.config/autostart/` instead.
 ## Command line
 
 ```
-tessera [--output CONNECTOR] [--desktop-dir PATH] [--config PATH] [--state-file PATH]
+tessera [--output CONNECTOR] [--desktop-dir PATH] [--icon-size SIZE] [--config PATH] [--state-file PATH]
 tessera --help
 tessera --version
 ```
 
-`TESSERA_OUTPUT`, `TESSERA_DESKTOP_DIR` and `TESSERA_STATE_FILE` are accepted
-as convenience environment overrides, mainly for development and testing. An
-explicit flag always wins over the matching environment variable.
+`--icon-size` takes the same values as the configuration file: `small`,
+`medium`, `large`, or a pixel value such as `72`.
+
+`TESSERA_OUTPUT`, `TESSERA_DESKTOP_DIR`, `TESSERA_ICON_SIZE` and
+`TESSERA_STATE_FILE` are accepted as convenience environment overrides, mainly
+for development and testing. An explicit flag always wins over the matching
+environment variable.
 
 Inspect connector names with `niri msg outputs`, `hyprctl monitors`, or
 `swaymsg -t get_outputs`.
