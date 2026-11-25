@@ -233,8 +233,11 @@ cargo run -- --desktop-dir ./some/test/folder --output DP-2
 ```
 
 The layout, assignment and state logic is covered by unit tests and does not
-need a compositor. The full implemented/partial/missing inventory and the
-next-work list live in [`docs/STATUS.md`](docs/STATUS.md).
+need a compositor. Placement is computed by `scene`, `layout` and `assignment`
+without any GTK widgets; `ui::host` owns the long-lived state and the other
+`ui` modules implement one feature each. The full
+implemented/partial/missing inventory and the next-work list live in
+[`docs/STATUS.md`](docs/STATUS.md).
 
 ## License
 

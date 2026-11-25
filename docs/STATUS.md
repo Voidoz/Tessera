@@ -252,15 +252,33 @@ that are intentionally out of scope for the current design.
 
 ## Architecture map
 
+The code is layered so the decisions can be read (and tested) without GTK:
+placement first, then the filesystem pieces, then the surfaces that paint the
+result.
+
+| Layer | Files | Responsibility |
+| --- | --- | --- |
+| Placement | `src/layout.rs`, `src/assignment.rs`, `src/scene.rs` | Grid geometry, pinned-first assignment, and the per-render scene mapping items to slots |
+| Files and state | `src/desktop.rs`, `src/state.rs`, `src/fileops.rs` | Folder scan and `.desktop` parsing, TOML position store, name validation/copy helpers |
+| UI | `src/ui/*` | Layer surfaces, widgets, gestures, overlays, and file actions |
+| Startup | `src/config.rs`, `src/main.rs` | TOML config, clap CLI, GTK application setup |
+
+The UI modules are split by concern; `DesktopHost` keeps the shared state and
+each module adds its own `impl DesktopHost` block.
+
 | File | Responsibility |
 | --- | --- |
-| `src/main.rs` | Startup, config/state path selection, GTK application, monitors |
-| `src/ui.rs` | Layer surfaces, probes, icon widgets, drag/drop, context menus, dialogs, keyboard, focus |
-| `src/layout.rs` | Pure grid geometry, panel insets, compaction, slots |
-| `src/assignment.rs` | Pinned-first, auto-fill placement across outputs |
-| `src/state.rs` | TOML position store, atomic save, rename/remove |
-| `src/desktop.rs` | Desktop scan, `.desktop` parsing, MIME/icon resolution, launch |
-| `src/config.rs` | TOML config, clap-derived CLI, drop-target mode |
+| `src/ui/mod.rs` | `DesktopHost` fields and module wiring |
+| `src/ui/host.rs` | Lifecycle, polling, painting, keyboard, selection |
+| `src/ui/surface.rs` | One output's layer surfaces, input regions, drop outline |
+| `src/ui/icon.rs` | Icon button and its click, drag, export and context gestures |
+| `src/ui/drag.rs` | Rearranging icons within Tessera |
+| `src/ui/drop.rs` | Incoming file drops |
+| `src/ui/overlay.rs` | Scrim and floating card shared by menus and dialogs |
+| `src/ui/menu.rs` | Item context menu |
+| `src/ui/dialogs.rs` | Rename, Properties and Open With |
+| `src/ui/actions.rs` | Trash, rename, copy path, show in files |
+| `src/ui/css.rs` | GTK style sheet |
 | `contrib/tessera.desktop` | Optional XDG autostart entry |
 
 Important invariants:
@@ -320,7 +338,7 @@ cargo clippy --all-targets
 cargo build --release
 ```
 
-The current test suite has 28 passing unit tests. It does not cover UI
+The current test suite has 39 passing unit tests. It does not cover UI
 interaction. Manual testing used temporary wlr virtual-pointer and
 virtual-keyboard clients; those helpers are not checked in.
 
