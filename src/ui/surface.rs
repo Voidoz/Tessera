@@ -134,16 +134,6 @@ impl OutputView {
         });
         actual.add_controller(drop);
 
-        let weak_for_clear = host;
-        let clear = gtk::GestureClick::new();
-        clear.set_button(1);
-        clear.connect_pressed(move |_, _, _, _| {
-            if let Some(host) = weak_for_clear.upgrade() {
-                host.clear_selection();
-            }
-        });
-        fixed.add_controller(clear);
-
         actual.present();
 
         Rc::new(Self {
